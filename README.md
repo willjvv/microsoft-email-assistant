@@ -1,13 +1,13 @@
-# Microsoft + Gemini Email Labeler MVP
+# Microsoft + Gemini Email Sorter MVP
 
 A small Python desktop/console application that:
 
 1. Signs into Microsoft 365 / Outlook using Microsoft Graph.
 2. Reads recent messages from your Inbox.
 3. Sends the subject, sender, and body preview to Google Gemini.
-4. Asks Gemini to choose one of YOUR categories.
-5. Applies that category to the Outlook message.
-6. Remembers processed message IDs so repeated runs do not re-label the same messages.
+4. Asks Gemini to choose one of your configured folder names.
+5. Moves the Outlook message into that folder under `Sorted`.
+6. Remembers processed message IDs so repeated runs do not sort the same messages again.
 
 ## Requirements
 
@@ -75,18 +75,20 @@ macOS/Linux:
 
 The first run gives you:
 
-    1. Configure categories
-    2. Label recent inbox emails
-    3. Show categories
+    1. Configure folders
+    2. Sort recent inbox emails
+    3. Show folders
     0. Exit
 
-Choose **1** and enter whatever categories you want.
+Choose **1** and enter the folder names you want Gemini to use. The app creates
+`Sorted` in your mailbox and creates one subfolder beneath it for each name.
 
 For example:
 
     Client, Personal, Finance, Newsletter, Scheduling, Urgent, Other
 
-Then choose **2**.
+Then choose **2**. Messages with confidence of at least 70% are moved into the
+matching `Sorted/<folder>` subfolder.
 
 The first Microsoft authentication will display a sign-in/device-code flow. After authentication, the app reads recent Inbox messages and asks Gemini to classify them.
 
@@ -94,8 +96,8 @@ The first Microsoft authentication will display a sign-in/device-code flow. Afte
 
 - Only messages returned by the Inbox query are considered.
 - Only messages that have not previously been recorded in `processed.json` are classified.
-- The app requires Gemini confidence >= 70% before applying a category.
-- Existing Outlook categories are preserved.
+- The app requires Gemini confidence >= 70% before moving a message.
+- Messages are moved out of the Inbox into a subfolder under `Sorted`.
 - The program never sends email.
 - The Microsoft access token is cached locally in `msal_token_cache.json`.
 
@@ -121,7 +123,7 @@ Delete:
 
 - GUI
 - Dry-run / preview mode
-- Per-category descriptions
+- Per-folder descriptions
 - Rules before Gemini
 - Confidence threshold setting
 - Process only unread messages

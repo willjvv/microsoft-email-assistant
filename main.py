@@ -6,13 +6,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from email_labeler.auth import get_access_token
-from email_labeler.classifier import GeminiClassifier
+from email_labeler.classifier import GeminiFolderSorter
 from email_labeler.graph import GraphClient
 from email_labeler.config import (
-    CATEGORIES_FILE,
+    FOLDERS_FILE,
     PROCESSED_FILE,
-    load_categories,
-    save_categories,
+    load_folders,
+    save_folders,
 )
 
 
@@ -33,45 +33,45 @@ def save_processed(ids):
     )
 
 
-def configure_categories():
-    current = load_categories()
+def configure_folders():
+    current = load_folders()
 
-    print("\nCurrent categories:")
-    for i, category in enumerate(current, 1):
-        print(f"  {i}. {category}")
+    print("\nCurrent folders:")
+    for i, folder in enumerate(current, 1):
+        print(f"  {i}. {folder}")
 
-    print("\nEnter the categories you want Gemini to use.")
+    print("\nEnter the folders you want Gemini to sort into.")
     print("Example: Client, Personal, Finance, Newsletter, Urgent")
-    raw = input("Categories (comma-separated): ").strip()
+    raw = input("Folders (comma-separated): ").strip()
 
     if not raw:
         print("No changes made.")
         return
 
-    categories = []
+    folders = []
     for item in raw.split(","):
         item = item.strip()
-        if item and item not in categories:
-            categories.append(item)
+        if item and item not in folders:
+            folders.append(item)
 
-    if len(categories) < 2:
-        print("Please provide at least two categories.")
+    if not folders:
+        print("Please provide at least one folder.")
         return
 
-    save_categories(categories)
-    print(f"\nSaved {len(categories)} categories to {CATEGORIES_FILE.name}.")
+    save_folders(folders)
+    print(f"\nSaved {len(folders)} folders to {FOLDERS_FILE.name}.")
 
 
-def run_labeling():
-    categories = load_categories()
+def sort_recent_emails():
+    folders = load_folders()
 
-    if len(categories) < 2:
-        print("You need at least two categories. Choose option 1 first.")
+    if not folders:
+        print("You need at least one folder. Choose option 1 first.")
         return
 
     token = get_access_token()
     graph = GraphClient(token)
-    classifier = GeminiClassifier()
+    sorter = GeminiFolderSorter()
 
     limit = int(os.getenv("EMAIL_LIMIT", "25"))
     print(f"\nFetching up to {limit} recent inbox emails...")
@@ -82,10 +82,11 @@ def run_labeling():
         print("No messages found.")
         return
 
+    folder_ids = graph.ensure_sorted_folders(folders)
     processed = load_processed()
 
     print(f"Found {len(messages)} messages.")
-    print("Gemini will classify messages that have not been processed.")
+    print("Gemini will sort messages that have not been processed.")
     print("Press Ctrl+C to stop.\n")
 
     changed = 0
@@ -112,36 +113,35 @@ def run_labeling():
         print(f"    From: {sender}")
 
         try:
-            result = classifier.classify(
+            result = sorter.choose_folder(
                 sender=sender,
                 subject=subject,
                 body=message.get("bodyPreview", ""),
-                categories=categories,
+                folders=folders,
             )
 
-            category = result.category
+            folder = result.folder
 
-            if category not in categories:
-                print(f"    Gemini returned invalid category: {category}")
+            if folder not in folders:
+                print(f"    Gemini returned invalid folder: {folder}")
                 failed += 1
                 continue
 
             print(
-                f"    → {category} "
+                f"    → Sorted/{folder} "
                 f"(confidence {result.confidence:.0%})"
             )
 
-            # Only apply the label when confidence is reasonably high.
-            # You can lower this threshold later if desired.
+            # Only move messages when the destination is reasonably clear.
             if result.confidence < 0.70:
                 print("    Skipped: confidence below 70%.")
                 processed.add(message_id)
                 continue
 
-            graph.add_category(message_id, category)
+            graph.move_message(message_id, folder_ids[folder])
             processed.add(message_id)
             changed += 1
-            print("    Labeled.")
+            print("    Moved.")
 
         except Exception as exc:
             failed += 1
@@ -150,7 +150,7 @@ def run_labeling():
     save_processed(processed)
 
     print("\nDone.")
-    print(f"  Labeled: {changed}")
+    print(f"  Moved: {changed}")
     print(f"  Already processed: {skipped}")
     print(f"  Failed: {failed}")
 
@@ -168,23 +168,23 @@ def main():
 
     while True:
         print("\n========================================")
-        print(" Microsoft + Gemini Email Labeler")
+        print(" Microsoft + Gemini Email Sorter")
         print("========================================")
-        print("1. Configure categories")
-        print("2. Label recent inbox emails")
-        print("3. Show categories")
+        print("1. Configure folders")
+        print("2. Sort recent inbox emails")
+        print("3. Show folders")
         print("0. Exit")
 
         choice = input("\nChoose an option: ").strip()
 
         if choice == "1":
-            configure_categories()
+            configure_folders()
         elif choice == "2":
-            run_labeling()
+            sort_recent_emails()
         elif choice == "3":
-            print("\nCategories:")
-            for category in load_categories():
-                print(f"  - {category}")
+            print("\nFolders under Sorted:")
+            for folder in load_folders():
+                print(f"  - Sorted/{folder}")
         elif choice == "0":
             print("Goodbye.")
             break

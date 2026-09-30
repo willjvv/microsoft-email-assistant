@@ -2,10 +2,10 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CATEGORIES_FILE = ROOT / "categories.json"
+FOLDERS_FILE = ROOT / "folders.json"
 PROCESSED_FILE = ROOT / "processed.json"
 
-DEFAULT_CATEGORIES = [
+DEFAULT_FOLDERS = [
     "Client",
     "Project",
     "Scheduling",
@@ -23,20 +23,20 @@ DEFAULT_CATEGORIES = [
 ]
 
 
-def load_categories():
-    if not CATEGORIES_FILE.exists():
-        save_categories(DEFAULT_CATEGORIES)
+def load_folders():
+    if not FOLDERS_FILE.exists():
+        save_folders(DEFAULT_FOLDERS)
 
     try:
-        data = json.loads(CATEGORIES_FILE.read_text(encoding="utf-8"))
-        categories = data.get("categories", [])
-        return [str(x).strip() for x in categories if str(x).strip()]
+        data = json.loads(FOLDERS_FILE.read_text(encoding="utf-8"))
+        folders = data.get("folders", [])
+        return [str(x).strip() for x in folders if str(x).strip()]
     except (json.JSONDecodeError, OSError):
-        return DEFAULT_CATEGORIES.copy()
+        return DEFAULT_FOLDERS.copy()
 
 
-def save_categories(categories):
-    CATEGORIES_FILE.write_text(
-        json.dumps({"categories": categories}, indent=2),
+def save_folders(folders):
+    FOLDERS_FILE.write_text(
+        json.dumps({"folders": folders}, indent=2),
         encoding="utf-8",
     )
