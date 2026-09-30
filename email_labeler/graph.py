@@ -18,7 +18,7 @@ class GraphClient:
             "$top": limit,
             "$select": (
                 "id,subject,from,receivedDateTime,"
-                "bodyPreview,categories,isRead"
+                "bodyPreview,isRead"
             ),
             "$orderby": "receivedDateTime DESC",
         }
@@ -28,32 +28,47 @@ class GraphClient:
 
         return response.json().get("value", [])
 
-    def add_category(self, message_id, category):
-        url = f"{GRAPH_BASE}/me/messages/{message_id}"
+    def ensure_folder(self, display_name, parent_id=None):
+        if parent_id:
+            collection_url = (
+                f"{GRAPH_BASE}/me/mailFolders/{parent_id}/childFolders"
+            )
+        else:
+            collection_url = f"{GRAPH_BASE}/me/mailFolders"
 
-        # Preserve categories already on the message.
-        current = self._get_message_categories(message_id)
-
-        if category in current:
-            return
-
-        categories = current + [category]
-
-        response = self.session.patch(
-            url,
-            json={"categories": categories},
-            timeout=30,
-        )
-        response.raise_for_status()
-
-    def _get_message_categories(self, message_id):
-        url = f"{GRAPH_BASE}/me/messages/{message_id}"
-
+        escaped_name = display_name.replace("'", "''")
         response = self.session.get(
-            url,
-            params={"$select": "categories"},
+            collection_url,
+            params={"$filter": f"displayName eq '{escaped_name}'"},
             timeout=30,
         )
         response.raise_for_status()
 
-        return response.json().get("categories", [])
+        folders = response.json().get("value", [])
+        for folder in folders:
+            if folder.get("displayName", "").casefold() == display_name.casefold():
+                return folder["id"]
+
+        response = self.session.post(
+            collection_url,
+            json={"displayName": display_name},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()["id"]
+
+    def ensure_sorted_folders(self, folder_names):
+        sorted_folder_id = self.ensure_folder("Sorted")
+        return {
+            name: self.ensure_folder(name, parent_id=sorted_folder_id)
+            for name in folder_names
+        }
+
+    def move_message(self, message_id, destination_folder_id):
+        url = f"{GRAPH_BASE}/me/messages/{message_id}/move"
+        response = self.session.post(
+            url,
+            json={"destinationId": destination_folder_id},
+            timeout=30,
+        )
+        response.raise_for_status()
